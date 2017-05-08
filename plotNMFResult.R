@@ -1,4 +1,4 @@
-signatures<-read.csv('nmfresult.dat',header = FALSE)
+signatures<-read.csv('nmfprocesses.dat',header = FALSE)
 nsig<-dim(signatures)[[2]]
 
 vocab_list <- read.table('vocabSorted.txt')
@@ -11,3 +11,26 @@ for(i in 1:nsig){
   barplot(signatures[,i], col=c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6), las=2, ylim=c(0, 0.25),names.arg = vocab_mtrx)
   dev.off()
 }
+
+load('100run.Rda')
+index = rep(0,5)
+largest_similarity = rep(0,5)
+for(i in 1:nsig){
+  max = 0
+  for(j in 1:nsig){
+    similarity = signatures_min[,i]%*%signatures[,j]/sqrt(signatures_min[,i]%*%signatures_min[,i]*signatures[,j]%*%signatures[,j])
+    print(sprintf('%d %d %.2f',i, j, similarity))
+    if(similarity > max){
+       max = similarity
+       index[[i]] = j
+    }
+  }
+  largest_similarity[[i]] = max
+}
+
+for(i in 1:nsig){
+  print(largest_similarity[[i]])
+  print(index[[i]])
+}
+
+
