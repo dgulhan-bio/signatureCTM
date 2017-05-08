@@ -1,6 +1,7 @@
 library('tm')
 library('topicmodels')
 library('ggplot2')
+source('getErrorFrob.R')
 
 #docs <- Corpus(DirSource("/Users/dgulhan/Park/CTM/workingDir/documentTest"))
 #table<-read.table('testrep.txt')
@@ -21,9 +22,7 @@ exposures_min <- matrix(1, 5, 127)
 
 min = 1
 
-signatures_nmf<-read.csv('nmfresult.dat')
-
-for(i in 1:1000){
+for(i in 1:100){
   
   ctm_tmp <- CTM(dtm, 5, method = "VEM")
 
@@ -45,9 +44,11 @@ for(i in 1:1000){
   for (j in 1:127){
     original[,j] = matrix_dtm[j,]
   }
+
+  originalNorm<-original
   
   for(j in 1:127){
-    original[,j] = original[,j]/sum(original[,j])
+    originalNorm[,j] = originalNorm[,j]/sum(originalNorm[,j])
   }
 
 #  for (k in 1:5){
@@ -57,13 +58,12 @@ for(i in 1:1000){
 #    barplot(signature_mtrx[,k], col=c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6), las=2, ylim=c(0, 0.25),names.arg = vocab_mtrx)
 #    dev.off()
 # }
-  diff <- original - reco
-  error <-sum(diag(diff %*% t(diff)))
-  inspect(dtm)
- 
+
+  error <- getErrorFrob(original, signature_mtrx, exposure_mtrx)
   
   if(error<min){
     min = error
+    print(min)
     signatures_min = signature_mtrx
     exposures_min = exposure_mtrx
   }
@@ -79,7 +79,7 @@ for (k in 1:5){
   dev.off()
 }
 
-save(original, reco, error, signatures_min, exposures_min ,file="1000run.Rda")
+save(originalNorm, original, reco, error, signatures_min, exposures_min ,file="1000run.Rda")
 
 print(error)
  
