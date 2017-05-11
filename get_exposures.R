@@ -1,3 +1,9 @@
+savePlot <- function(myPlot,i) {
+        pdf(sprintf("myPlot%d.pdf",i))
+        print(myPlot)
+        dev.off()
+}
+
 sort_signatures <- function(signatures, measure){
   sig_nrow = nrow(signatures)
   sig_ncolumn = ncol(signatures)
@@ -14,14 +20,30 @@ sort_signatures <- function(signatures, measure){
   return(t(signatures_sorted))  
 }
 
-get_exposures <- function(){
+get_exposures <- function(add_nmf_result = TRUE){
 
   source('match_signatures.R')
   source('get_error_frob.R')
   source('calculate_bic.R')
   library('nnls')
+  library('ggplot2')
   load('100run.Rda')
   
+  barcols = rep(0,192)
+  barcols[1:16] = 1
+  barcols[17:32] = 2
+  barcols[33:48] = 3
+  barcols[49:64] = 4
+  barcols[65:80] = 5
+  barcols[81:96] = 6
+  barcols[97:112] = 1
+  barcols[113:128] = 2
+  barcols[129:144] = 3
+  barcols[145:160] = 4
+  barcols[161:176] = 5
+  barcols[177:192] = 6
+  print(barcols)
+  print(length(barcols))
   ngenome = dim(original)[[2]]
   nsig = dim(signatures_min)[[2]]
   ntype = dim(signatures_min)[[1]]
@@ -50,7 +72,7 @@ get_exposures <- function(){
     min_bic = 10000
     min_error = 10000
     min_signature <- matrix(0,2,1)
-    
+    min_remnant <- rep(0,96)
     #check all possible number of total signatures
     for(i in 1:nsig){
       #get subset of signatures acc. to the total number 
@@ -62,7 +84,10 @@ get_exposures <- function(){
       #calculate exposure
       fit_nnls<-nnls(signature_subset, this_genome)
       this_exposure <- coef(fit_nnls)
-      remnant <- signature_subset %*% this_exposure - this_genome
+      reco <- signature_subset %*% this_exposure
+      reco[ reco < 1 ] = 0
+      remnant <- reco - this_genome
+      
       #print(dim(remnant))
       frob_error <- sqrt(sum(diag(t(remnant) %*% remnant)))/sqrt(sum(diag(this_genome %*% this_genome)))
       
@@ -73,9 +98,25 @@ get_exposures <- function(){
         min_error = frob_error
         min_exposure <- this_exposure
         min_signature <- signature_subset      
+        min_remnant <- remnant 
       }
     }
-   print(sprintf('genome %d, num sig = %d, frob error = %.3f, bic = %.3f', igenome, length(min_exposure), frob_error, bic))
+
+    combine_remnant_original = matrix(0, 192, 3)
+    combine_remnant_original[1:96,1] = t(remnant)
+    combine_remnant_original[97:192,1] = t(this_genome)
+    combine_remnant_original[1:96,2] = c(1:96)
+    combine_remnant_original[97:192,2] = c(1:96)
+    combine_remnant_original[1:96,3] = rep(3,96)
+    combine_remnant_original[97:192,3] = rep(4,96)
+
+    df_rem_ori <- data.frame(combine_remnant_original)
+    colnames(df_rem_ori) <- c('remnant', 'number', 'before')
+    #print(df_rem_ori)
+    myplot<-ggplot(df_rem_ori, aes(x = number, y = remnant, fill = before)) + geom_bar(stat = "identity")
+    savePlot(myplot,igenome)
+
+    print(sprintf('genome %d, num sig = %d, frob error = %.3f, bic = %.3f', igenome, length(min_exposure), frob_error, bic))
     
     #fill in info of best exposures for the plot  
     for(i in 1:nsig){
@@ -91,11 +132,36 @@ get_exposures <- function(){
     }
     #return(this_exposure)
   }
+  
   print(sprintf('frob error all = %.3f', get_error_frob(original, signatures_min, exposures_nnls)))
-  png('exposuresComparison.png', width=6000, height=1500, res=300)
-  par(mfrow=c(1,3))
+  plot_width = 4000
+  if(add_nmf_result) plot_width = 6000
+  png('exposuresComparison.png', width = plot_width, height = 1500, res = 300)
+  par(mfrow = c(1,3))
   barplot(exposures_nnls, col = c(3,4,5,6,7))
-  mtext(text='decompose in ctm',side=3)
+  mtext(text = 'nnls to decompose ctm sig',side = 3)
   barplot(exposures_min, col = c(3,4,5,6,7))
+  mtext(text = 'result ctm',side = 3)
+  if(add_nmf_result){
+    source('match_signatures.R')
+    source('get_error_frob.R')
+
+    signatures_nmf<-as.matrix(read.csv('nmfprocesses.dat',header = FALSE))
+    exposures_nmf<-as.matrix(read.csv('nmfexposures.dat',header = FALSE))
+    genomes_nmf<-as.matrix(read.csv('originalgenomes.dat',header = FALSE))
+    match_index<-matchSignatures(signatures_nmf, signatures_min)
+
+    exposures_nmf_resorted<-exposures_nmf
+    for(i in 1:5){
+      exposures_nmf_resorted[i,] = exposures_nmf[match_index[[i]],]
+    }
+    barplot(exposures_nmf_resorted, col = c(3,4,5,6,7))
+    mtext(text='result nmf sanger',side=3)
+  }
+
+  legend("topright", legend=c("Signature1", "Signature2", "Signature3", "Signature4", "Signature5"), fill = c(3,4,7,6,5), cex = 1.5)
+
   dev.off()
+
+  save(exposures_nnls, original, signatures_min, file = "exposures_genome_by_genome.Rda")
 }
