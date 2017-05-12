@@ -1,11 +1,11 @@
 library('tm')
 library('topicmodels')
 library('ggplot2')
-source('getErrorFrob.R')
+source('get_error_frob.R')
 
 #docs <- Corpus(DirSource("/Users/dgulhan/Park/CTM/workingDir/documentTest"))
 #table<-read.table('testrep.txt')
-load('frame3BaseAging.Rda')
+load('craig/split_out_documents/frame3BaseAging.Rda')
 ds <- DataframeSource(frame3BaseAging)
 corpus <- Corpus(ds)
 
@@ -79,7 +79,7 @@ for (k in 1:5){
   dev.off()
 }
 
-save(originalNorm, original, reco, error, signatures_min, exposures_min ,file="1000run.Rda")
+save(originalNorm, original, reco, error, signatures_min, exposures_min ,file="single_double_100run.Rda")
 
 print(error)
  
