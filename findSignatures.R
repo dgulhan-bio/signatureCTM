@@ -11,7 +11,7 @@ load('craig/split_out_documents_2/frame3BaseAging.Rda')
 ds <- DataframeSource(frame3BaseAging)
 corpus <- Corpus(ds)
 
-vocab_list <- read.table('vocabSorted2.txt')
+vocab_list <- read.table('vocabSorted.txt')
 vocab_mtrx <- array(unlist(vocab_list), dim = c(nrow(vocab_list), ncol(vocab_list), length(vocab_list)))
 
 dtm <- DocumentTermMatrix(corpus)
@@ -25,9 +25,10 @@ for(isig in 2:nsig_max){
   total_columns <- total_columns + isig
 }
 
-min_signatures_array = matrix(0, ntype, total_columns)
-min_exposures_array = matrix(0, total_columns, ngenome)
-
+min_signatures_array <- matrix(0, ntype, total_columns)
+clusters_array <- matrix(0, ntype, total_columns)
+min_exposures_array <- matrix(0, total_columns, ngenome)
+variance_all <- rep(0, total_columns)
 total_columns <- 0
 
 min_error = rep(nsig_max)
@@ -40,6 +41,8 @@ for(isig in 2:nsig_max){
   exposures_min <- matrix(1, isig, ngenome)
 
   min = 1
+  all_signatures <- matrix(0, isig*100, ntype)
+  
   for(i in 1:100){
   
     ctm_tmp <- CTM(dtm, isig, method = "VEM")
@@ -58,7 +61,7 @@ for(isig in 2:nsig_max){
     reco <- signature_mtrx %*% exposure_mtrx
     matrix_dtm<-as.matrix(dtm)
     original<-matrix(0,dim(matrix_dtm)[[2]],dim(matrix_dtm)[[1]])
-  
+    
     for (j in 1:ngenome){
       original[,j] = matrix_dtm[j,]
     }
@@ -70,7 +73,8 @@ for(isig in 2:nsig_max){
     }
 
     error <- getErrorFrob(original, signature_mtrx, exposure_mtrx)
-  
+    all_signatures[(i-1)*isig+1:i*isig, ] <- t(signature_mtrx)
+    
     if(error<min){
       min = error
       print(min)
@@ -78,11 +82,35 @@ for(isig in 2:nsig_max){
       exposures_min = exposure_mtrx
     }
     #print(terms)
+  } 
+   
+  fit <- kmeans(all_signatures, isig) # 5 cluster solution
+  aggregate(all_signatures, by=list(fit$cluster), FUN=mean)
+  all_signatures <- data.frame(all_signatures, fit$cluster)
+  
+  num_entry_in_cluster = rep(0,isig)
+  mean_clusters = matrix(0, ntype, isig) 
+  variance_clusters = rep(0,isig)
+
+  for (k in 1:isig){
+    mean_cluster = rep(0,ntype)
+    mean_cluster <- colMeans(all_signatures[all_signatures$fit.cluster==k,1:ngenome])
+    variance <- sum(apply(all_signatures[all_signatures$fit.cluster==k,1:ngenome],2,var))
+    #for(j in 1:500){
+    #  if( all_signature$fit.cluster[j] == k ){
+    #    mean_cluster <- mean_cluster + all_signatures[j,1:ntype]
+    #    num_entry_in_cluster[k] = num_entry_in_cluster[k] + 1
+    #  }
+    #}
+    mean_cluster = mean_cluster/num_entry_in_cluster[k]
+    variance_clusters[k] <- variance
+    mean_clusters[,k] <- t(mean_cluster)
   }
- 
 
   for (k in 1:isig){
     min_signatures_array[,total_columns + k] = signatures_min[, k]
+    clusters_array[total_columns + k] = mean_clusters[, k] 
+    variance_all[total_columns + k] = variance_clusters[k]
     min_exposures_array[total_columns + k,] = exposures_min[k, ]
     min_error[k] = min
     print(k)
@@ -94,6 +122,6 @@ for(isig in 2:nsig_max){
   total_columns <- total_columns + isig
 }
 
-save(min_signatures_array, originalNorm, original,  min_error, file="single_double_100run.Rda")
+save(min_signatures_array, clusters_array, originalNorm, original,  min_error, variance_all, file="single_double_100run.Rda")
 
  
