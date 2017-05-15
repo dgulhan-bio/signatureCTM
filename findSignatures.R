@@ -11,7 +11,7 @@ load('craig/split_out_documents_2/frame3BaseAging.Rda')
 ds <- DataframeSource(frame3BaseAging)
 corpus <- Corpus(ds)
 
-vocab_list <- read.table('vocabSorted.txt')
+vocab_list <- read.table('vocabSorted2.txt')
 vocab_mtrx <- array(unlist(vocab_list), dim = c(nrow(vocab_list), ncol(vocab_list), length(vocab_list)))
 
 dtm <- DocumentTermMatrix(corpus)
@@ -59,13 +59,13 @@ for(isig in 2:nsig_max){
     matrix_dtm<-as.matrix(dtm)
     original<-matrix(0,dim(matrix_dtm)[[2]],dim(matrix_dtm)[[1]])
   
-    for (j in 1:127){
+    for (j in 1:ngenome){
       original[,j] = matrix_dtm[j,]
     }
 
     originalNorm<-original
   
-    for(j in 1:127){
+    for(j in 1:ngenome){
       originalNorm[,j] = originalNorm[,j]/sum(originalNorm[,j])
     }
 
