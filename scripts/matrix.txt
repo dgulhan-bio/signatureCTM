@@ -1,0 +1,2 @@
+./make_matrix.sh: line 5: declare: -A: invalid option
+declare: usage: declare [-afFirtx] [-p] [name[=value] ...]
