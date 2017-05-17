@@ -1,3 +1,4 @@
+rm(list=ls())
 library('tm')
 library('topicmodels')
 library('ggplot2')
@@ -11,7 +12,7 @@ load('craig/split_out_documents_2/frame3BaseAging.Rda')
 ds <- DataframeSource(frame3BaseAging)
 corpus <- Corpus(ds)
 
-vocab_list <- read.table('vocabSorted.txt')
+vocab_list <- read.table('vocabSorted2.txt')
 vocab_mtrx <- array(unlist(vocab_list), dim = c(nrow(vocab_list), ncol(vocab_list), length(vocab_list)))
 
 dtm <- DocumentTermMatrix(corpus)
@@ -72,8 +73,10 @@ for(isig in 2:nsig_max){
       originalNorm[,j] = originalNorm[,j]/sum(originalNorm[,j])
     }
 
-    error <- getErrorFrob(original, signature_mtrx, exposure_mtrx)
-    all_signatures[(i-1)*isig+1:i*isig, ] <- t(signature_mtrx)
+    error <- get_error_frob(original, signature_mtrx, exposure_mtrx)
+    dim(all_signatures)
+    dim(signature_mtrx)
+    all_signatures[integer((i-1)*isig+1):(i*isig), ] <- t(signature_mtrx)
     
     if(error<min){
       min = error
@@ -94,7 +97,8 @@ for(isig in 2:nsig_max){
 
   for (k in 1:isig){
     mean_cluster = rep(0,ntype)
-    mean_cluster <- colMeans(all_signatures[all_signatures$fit.cluster==k,1:ngenome])
+    mean_cluster <- colMeans(all_signatures[all_signatures$fit.cluster==k,])[1:ntype,]
+    print(mean_cluster)
     variance <- sum(apply(all_signatures[all_signatures$fit.cluster==k,1:ngenome],2,var))
     #for(j in 1:500){
     #  if( all_signature$fit.cluster[j] == k ){
