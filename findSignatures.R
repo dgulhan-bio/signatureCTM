@@ -4,21 +4,22 @@ library('topicmodels')
 library('ggplot2')
 source('get_error_frob.R')
 
-nsig_max = 3
+nsig_max = 8
 nsig_min = 2
 
 #docs <- Corpus(DirSource("/Users/dgulhan/Park/CTM/workingDir/documentTest"))
 #table <- read.table('testrep.txt')
 
 #get the input data frame and convert it to a document term matrix 
-load('craig/split_out_documents_2/frame3BaseAging.Rda')
+#load('craig/split_out_documents_2/frame3BaseAging.Rda') #192 dimensions
+load('frame3BaseAging2.Rda')
 ds <- DataframeSource(frame3BaseAging)
 corpus <- Corpus(ds)
 dtm <- DocumentTermMatrix(corpus)
 inspect(dtm)
 
 #get the vocabulary of snv's, just needed for plotting not for the signature finding
-vocab_list <- read.table('vocabSorted2.txt')
+vocab_list <- read.table('vocabSorted.txt')
 vocab_mtrx <- array(unlist(vocab_list), dim = c(nrow(vocab_list), ncol(vocab_list), length(vocab_list)))
 
 
@@ -104,8 +105,8 @@ for(isig in nsig_min:nsig_max){#loop over all possible number of signatures
     mean_cluster = rep(0,ntype)
     mean_cluster <- colMeans(all_signatures[all_signatures$fit.cluster==k,])[1:ntype]
     print(mean_cluster)
-    variance <- sum(apply(all_signatures[all_signatures$fit.cluster==k,1:ngenome],2,var))
-    
+    variance <- sum(apply(all_signatures[all_signatures$fit.cluster==k,1:ntype],2,var))
+   
     variance_clusters[k] <- variance
     mean_clusters[,k] <- t(mean_cluster)
   }
@@ -125,5 +126,5 @@ for(isig in nsig_min:nsig_max){#loop over all possible number of signatures
   total_columns <- total_columns + isig
 }
 
-save(min_signatures_array, clusters_array, originalNorm, original,  min_error, variance_all, file="single_double_100run.Rda")
+save(min_signatures_array, min_exposures_array, ntype, ngenome, nsig_min, nsig_max, clusters_array, originalNorm, original,  min_error, variance_all, vocab_mtrx, file="aging_100run.Rda")
 
