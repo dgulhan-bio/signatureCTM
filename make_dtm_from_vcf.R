@@ -134,7 +134,7 @@ make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.h
   seq_start <- start(gr_context)
   seq_end <- end(gr_context)
 
-  chrom_nums <- paste0('chr',as.vector(gr_context@seqnames))
+  chrom_nums <- paste0('chr',as.vector(seqnames(gr_context)))
   context_seq <- getSeq(ref_genome, names = chrom_nums, start = seq_start, end = seq_end, as.character = TRUE)
 
   #get ref and alt
