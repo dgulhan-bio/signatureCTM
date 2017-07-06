@@ -47,9 +47,9 @@ library(BSgenome.Hsapiens.UCSC.hg19)
 ##given nmer context, ref, alt information calculates 
 ##counts for each type of snv
 .convert_seq_to_vector <- function(context, ref_vector, alt_vector, types, nstrand = 1){
-  context <- tolower(as.character(context))
-  ref_vector <- tolower(as.character(ref_vector))
-  alt_vector <- tolower(as.character(alt_vector))
+  context <- tolower(context)
+  ref_vector <- tolower(ref_vector)
+  alt_vector <- tolower(alt_vector)
   nsnv <- length(context)
 
   if(nsnv != length(ref_vector) || nsnv != length(alt_vector))
@@ -139,11 +139,26 @@ make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.h
 
   #get ref and alt
   ref_vector <- as.character(ref(vcf))
-  alt_vector <- as.character(alt(vcf)@unlistData)
+  alt_vector <- as.character(unlist(alt(vcf)))
 
   #convert snv arrays into counts specified by types
   count_array <- .convert_seq_to_vector(context_seq, ref_vector, alt_vector, types, nstrand)
   return(count_array)
+}
+
+##given a list of vcf files returns a matrix
+make_matrix_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapiens.UCSC.hg19, ncontext = 3, nstrand = 1){
+  vcf_files_table <- read.table(vcf_file_list)
+  vcf_files <- as.character(vcf_files_table$V1)
+  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, 0)
+  types <- .make_type(ncontext, nstrand)
+  for(ifile in 1:length(vcf_files)){
+    count_vector <- make_vector_from_vcf(vcf_files[[ifile]], ref_genome, types, ncontext, nstrand)
+    matrix_snvs <- cbind(matrix_snvs, count_vector)
+  }  
+  rownames(matrix_snvs, types)
+  colnames(matrix_snvs, vcf_files)
+  return(matrix_snvs)
 }
 
 ##given a list of vcf files returns a document term matrix
@@ -158,3 +173,4 @@ make_dtm_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapiens
   }  
   return(make_dtm_from_matrix(matrix_snvs, vcf_files, types))
 }
+
