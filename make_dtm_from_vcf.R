@@ -5,40 +5,77 @@ library(BSgenome)
 
 library(BSgenome.Hsapiens.UCSC.hg19)
 
-make_dtm_from_matrix <- function(input_matrix, sample_names, types){
-  dtm <- as.simple_triplet_matrix(input_matrix)
-  dtm$dimnames$Docs <- sample_names
-  dtm$dimnames$Terms <- types
-  class(dtm) <- c("DocumentTermMatrix", "simple_triplet_matrix")
-  attr(dtm, "weighting") <- c("term frequency", "tf")
+##flips a single base
+.flip_base <- function(base){
+  switch(base, 
+  a = {
+    return('t')
+  },
+  c = {
+    return('g')    
+  },
+  g = {
+    return('c')
+  },
+  t = {
+    return('a')
+  },{
+    stop(sprintf('invalid base input %s', base))
+  })
 }
 
-.convert_to_vector <- function(context, ref, alt, types){
+##flips the bases in a combination to the opposite strand
+.flip_strand <- function(comb_in){
+  comb_out <- rep('', length(comb_in))
+  for(isnv in 1:length(comb_in)){
+    snv <- comb_in[[isnv]]
+    ref <- substr(snv, 1, 1)
+    if( ref == 'c' || ref == 't'){
+      comb_out[[isnv]] <- snv
+      next
+    }else{
+      ref <- .flip_base(ref)
+      alt <- .flip_base(substr(snv, 2, 2))
+      prime5 <- .flip_base(substr(snv, 3, 3))
+      prime3 <- .flip_base(substr(snv, 3, 3))
+      comb_out[[isnv]] <- paste0(ref, alt, prime3, prime5)
+    }
+  }
+  return(comb_out)
+}
+
+##given nmer context, ref, alt information calculates 
+##counts for each type of snv
+.convert_seq_to_vector <- function(context, ref_vector, alt_vector, types, nstrand = 1){
+  context <- tolower(as.character(context))
+  ref_vector <- tolower(as.character(ref_vector))
+  alt_vector <- tolower(as.character(alt_vector))
   nsnv <- length(context)
-  context <- tolower(context)
-  ref <- tolower(ref)
-  alt <- tolower(alt)
-  
-  if(nsnv != length(ref) || nsnv != length(alt) || nsnv != length(types))
+
+  if(nsnv != length(ref_vector) || nsnv != length(alt_vector))
     stop('dimensions of context ref alt are different')
   if(nsnv == 0) 
     stop('empty snv array')
   
+ 
   range <- nchar(context[[1]])
-  if(nchar %% 2 == 0)
+  if(range %% 2 == 0)
     stop('context should be an odd number')
   
-  combined <- lapply(ref, paste0, alt) 
-  combined <- lapply(combined, paste0, substr(context, 1, floor(nchar/2))
-  combined <- lapply(combined, paste0, substr(context, range - floor(nchar/2), range) 
+ 
+  combined <- paste0(ref_vector, alt_vector) 
+  combined <- paste0(combined, substr(context, 1, floor(range/2)))
+  combined <- paste0(combined, substr(context, ceiling(range/2)+1, range))
   
-  count_vector <- rep(0, length(types))
+  if(nstrand == 1) combined <- .flip_strand(combined)
 
+  count_vector <- rep(0, length(types))
+ 
   #binary search for counting the occurances of each type
   for(snv in combined){
-    L <- 0
-    R <- nsnv - 1
-    m <- 0
+    L <- 1
+    R <- length(types)
+    m <- 1
     while(L < R){
       m <- floor((L + R)/2)
       if(types[[m]] < snv) L <- m+1
@@ -52,18 +89,21 @@ make_dtm_from_matrix <- function(input_matrix, sample_names, types){
   return(count_vector)
 }
 
+##given nmer size and strand choice returns 
+## an array of types of snvs
 .make_type <- function(ncontext = 3, nstrand = 1){
   components <- c('a', 'c', 'g', 't')
+  base_in <- ''
   if(nstrand == 1) base_in <- c('c', 't')
   else base_in <- components  
-  types <- rep('', 3*4^(context -1)*nstrand ))
+  types <- rep('', 6*4^(ncontext -1)*nstrand )
   index <- 1
-  for(base in basein){
+  for(base in base_in){
     for(alt in components[!grepl('a',components)]){
-      for(5prime in components){
-        for(3prime in components){     
-          types[[index]] paste0(base, alt, 5prime, 3prime)
-          index <- index + 1
+      for(prime5 in components){
+        for(prime3 in components){     
+          types[[index]] <- paste0(base, alt, prime5, prime3)
+           index <- index + 1
         }
       }
     }
@@ -71,7 +111,18 @@ make_dtm_from_matrix <- function(input_matrix, sample_names, types){
   types <- sort(types)
 }
 
-make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.hg19, ncontext = 3){
+##converts a matrix to a document term matrix
+make_dtm_from_matrix <- function(input_matrix, sample_names, types){
+  dtm <- as.simple_triplet_matrix(input_matrix)
+  dtm$dimnames$Docs <- sample_names
+  dtm$dimnames$Terms <- types
+  class(dtm) <- c("DocumentTermMatrix", "simple_triplet_matrix")
+  attr(dtm, "weighting") <- c("term frequency", "tf")
+  return(dtm)
+}
+
+##converts a single vcf to a vector of counts of types
+make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.hg19, types, ncontext = 3, nstrand = 1){
   #get vcf obj using genomic ranges
   vcf <- readVcf(vcf_file)
   gr <- granges(vcf)  
@@ -80,23 +131,29 @@ make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.h
   gr_context <- resize(gr, ncontext, fix = 'center')
   
   #read the context around snv from the reference
-  seq_start <- gr_context@ranges@start ranges
+  seq_start <- gr_context@ranges@start 
   seq_end <- gr_context@ranges@start + gr_context@ranges@width - 1
-  chrom_nums<-paste0('chr',as.vector(gr_context@seqnames), seq = '')
-  context_seq <- getSeq(ref_genome, chrom_nums, start = seq_start, end = seq_end, as.character = TRUE)
-  
+  chrom_nums <- paste0('chr',as.vector(gr_context@seqnames))
+  context_seq <- getSeq(ref_genome, names = chrom_nums, start = seq_start, end = seq_end, as.character = TRUE)
+
+  #get ref and alt
+  ref_vector <- as.vector(gr_context@elementMetadata@listData$REF)
+  alt_vector <- as.vector(gr_context@elementMetadata@listData$ALT@unlistData)
+
   #convert snv arrays into counts specified by types
-  count_array <- .convert_to_vector(context_seq, ref, alt)
+  count_array <- .convert_seq_to_vector(context_seq, ref_vector, alt_vector, types, nstrand)
   return(count_array)
 }
 
+##given a list of vcf files returns a document term matrix
 make_dtm_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapiens.UCSC.hg19, ncontext = 3, nstrand = 1){
   vcf_files_table <- read.table(vcf_file_list)
-  vcf_files <- vcf_files_table$V1
-  matrix_snvs <- matrix(0, 3*4^(ncontext - 1)*nstrand, 0)
-  for(ifile in 1:length(vcf_files)){
-    matrix_snvs <- cbind(matrix_snvs, make_dtm_from_vcf(vcf_files[[ifile]], ref_genome))
-  }  
+  vcf_files <- as.character(vcf_files_table$V1)
+  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, 0)
   types <- .make_type(ncontext, nstrand)
-  make_dtm_from_matrix(matrix_snvs, vcf_files, types)
+  for(ifile in 1:length(vcf_files)){
+    count_vector <- make_vector_from_vcf(vcf_files[[ifile]], ref_genome, types, ncontext, nstrand)
+    matrix_snvs <- cbind(matrix_snvs, count_vector)
+  }  
+  return(make_dtm_from_matrix(matrix_snvs, vcf_files, types))
 }
