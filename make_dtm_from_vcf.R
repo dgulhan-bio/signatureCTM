@@ -131,14 +131,15 @@ make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.h
   gr_context <- resize(gr, ncontext, fix = 'center')
   
   #read the context around snv from the reference
-  seq_start <- gr_context@ranges@start 
-  seq_end <- gr_context@ranges@start + gr_context@ranges@width - 1
+  seq_start <- start(gr_context)
+  seq_end <- end(gr_context)
+
   chrom_nums <- paste0('chr',as.vector(gr_context@seqnames))
   context_seq <- getSeq(ref_genome, names = chrom_nums, start = seq_start, end = seq_end, as.character = TRUE)
 
   #get ref and alt
-  ref_vector <- as.vector(gr_context@elementMetadata@listData$REF)
-  alt_vector <- as.vector(gr_context@elementMetadata@listData$ALT@unlistData)
+  ref_vector <- as.character(ref(vcf))
+  alt_vector <- as.character(alt(vcf)@unlistData)
 
   #convert snv arrays into counts specified by types
   count_array <- .convert_seq_to_vector(context_seq, ref_vector, alt_vector, types, nstrand)
