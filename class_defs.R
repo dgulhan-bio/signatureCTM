@@ -3,7 +3,7 @@ library(topicmodels)
 
 setClass("topic.mod.obj", representation(ctm = "CTM_VEM", lda = "LDA_VEM"))
 
-setClass("sign.miner", representation(nsig = "integer",
+setClass("sign.inst", representation(nsig = "integer",
                                       signs= "matrix", 
                                       exps = "matrix", 
                                       method = "topic.mod.obj",
@@ -13,44 +13,44 @@ setClass("sign.miner", representation(nsig = "integer",
                                       silhou.width = "vector",
                                       choice.met = "character"))
 
-setGeneric("set.miners", def = function(object, nsig, signs, exps){
-  standardGeneric("set.miners")
+setGeneric("set.insts", def = function(object, nsig, signs, exps){
+  standardGeneric("set.insts")
 })
 
 setGeneric("calc.frob.error", def = function(object, input.matrix){
   standardGeneric("calc.frob.error")
 })
 
-setGeneric("calc.perplexity.miner", function(object, new.data, method.desc){
-  standardGeneric("calc.perplexity.miner")
+setGeneric("calc.perplexity.inst", function(object, new.data, method.desc){
+  standardGeneric("calc.perplexity.inst")
 })
 
-setGeneric("calc.bic.miner", function(object, input.dtm, method.desc){
-  standardGeneric("calc.bic.miner")
+setGeneric("calc.bic.inst", function(object, input.dtm, method.desc){
+  standardGeneric("calc.bic.inst")
 })
 
-setClass("sign.mine", representation(nsig.min = "integer", 
+setClass("sign.stack", representation(nsig.min = "integer", 
                                      nsig.step = "integer", 
                                      nsig.max = "integer", 
                                      method = "character", 
                                      input.dtm = "DocumentTermMatrix", 
                                      types = "vector", 
-                                     miners = "list",
-                                     num.miners = "integer"))
+                                     insts = "list",
+                                     num.insts = "integer"))
 
-setGeneric("run.mine", def = function(object){
-  standardGeneric("run.mine")
+setGeneric("run.calc", def = function(object){
+  standardGeneric("run.calc")
 })
 
-setGeneric("set.mine", def = function(object, input.dtm, nsig.min, nsig.max, nsig.step = as.integer(1), method = "ctm"){
-  standardGeneric("set.mine")
+setGeneric("set.stack", def = function(object, input.dtm, nsig.min, nsig.max, nsig.step = as.integer(1), method = "ctm"){
+  standardGeneric("set.stack")
 })
 
-setGeneric("types", signature(object = "sign.mine"), def = function(object){
+setGeneric("types", signature(object = "sign.stack"), def = function(object){
   standardGeneric("types")
 })
 
-setGeneric("genomes", signature(object = "sign.mine"), def = function(object){
+setGeneric("genomes", signature(object = "sign.stack"), def = function(object){
   standardGeneric("genomes")
 })
 
