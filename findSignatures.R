@@ -4,7 +4,7 @@ library('topicmodels')
 library('ggplot2')
 source('get_error_frob.R')
 
-nsig_max = 8
+nsig_max = 3
 nsig_min = 2
 
 #docs <- Corpus(DirSource("/Users/dgulhan/Park/CTM/workingDir/documentTest"))
@@ -126,5 +126,5 @@ for(isig in nsig_min:nsig_max){#loop over all possible number of signatures
   total_columns <- total_columns + isig
 }
 
-save(min_signatures_array, min_exposures_array, ntype, ngenome, nsig_min, nsig_max, clusters_array, originalNorm, original,  min_error, variance_all, vocab_mtrx, file="aging_100run.Rda")
+save(min_signatures_array, min_exposures_array, ntype, ngenome, nsig_min, nsig_max, clusters_array, originalNorm, original,  min_error, variance_all, vocab_mtrx, file="test.Rda")
 
