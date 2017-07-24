@@ -113,11 +113,13 @@ library(BSgenome.Hsapiens.UCSC.hg19)
 
 ##converts a matrix to a document term matrix
 make_dtm_from_matrix <- function(input_matrix, sample_names, types){
-  dtm <- as.simple_triplet_matrix(input_matrix)
-  dtm$dimnames$Docs <- sample_names
+  dtm <- as.simple_triplet_matrix(t(input_matrix))
+  dtm$dimnames$Docs <- as.character(1:length(sample_names))
+  #dtm$dimnames$Docs <- sample_names
   dtm$dimnames$Terms <- types
   class(dtm) <- c("DocumentTermMatrix", "simple_triplet_matrix")
   attr(dtm, "weighting") <- c("term frequency", "tf")
+  print(dim(input_matrix))
   return(dtm)
 }
 
@@ -142,19 +144,19 @@ make_vector_from_vcf <- function(vcf_file, ref_genome = BSgenome.Hsapiens.UCSC.h
   alt_vector <- as.character(unlist(alt(vcf)))
 
   #convert snv arrays into counts specified by types
-  count_array <- .convert_seq_to_vector(context_seq, ref_vector, alt_vector, types, nstrand)
-  return(count_array)
+  count_vector <- .convert_seq_to_vector(context_seq, ref_vector, alt_vector, types, nstrand)
+  return(count_vector)
 }
 
 ##given a list of vcf files returns a matrix
 make_matrix_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapiens.UCSC.hg19, ncontext = 3, nstrand = 1){
   vcf_files_table <- read.table(vcf_file_list)
   vcf_files <- as.character(vcf_files_table$V1)
-  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, 0)
+  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, length(vcf_files))
   types <- .make_type(ncontext, nstrand)
   for(ifile in 1:length(vcf_files)){
     count_vector <- make_vector_from_vcf(vcf_files[[ifile]], ref_genome, types, ncontext, nstrand)
-    matrix_snvs <- cbind(matrix_snvs, count_vector)
+    matrix_snvs[, ifile] <- count_vector
   }  
   rownames(matrix_snvs, types)
   colnames(matrix_snvs, vcf_files)
@@ -165,11 +167,11 @@ make_matrix_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapi
 make_dtm_from_vcf_list <- function(vcf_file_list, ref_genome = BSgenome.Hsapiens.UCSC.hg19, ncontext = 3, nstrand = 1){
   vcf_files_table <- read.table(vcf_file_list)
   vcf_files <- as.character(vcf_files_table$V1)
-  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, 0)
+  matrix_snvs <- matrix(0, 6*4^(ncontext - 1)*nstrand, length(vcf_files))
   types <- .make_type(ncontext, nstrand)
   for(ifile in 1:length(vcf_files)){
     count_vector <- make_vector_from_vcf(vcf_files[[ifile]], ref_genome, types, ncontext, nstrand)
-    matrix_snvs <- cbind(matrix_snvs, count_vector)
+    matrix_snvs[, ifile] <- count_vector
   }  
   return(make_dtm_from_matrix(matrix_snvs, vcf_files, types))
 }
