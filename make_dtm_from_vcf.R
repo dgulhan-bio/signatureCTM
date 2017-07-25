@@ -37,7 +37,7 @@ library(BSgenome.Hsapiens.UCSC.hg19)
       ref <- .flip_base(ref)
       alt <- .flip_base(substr(snv, 2, 2))
       prime5 <- .flip_base(substr(snv, 3, 3))
-      prime3 <- .flip_base(substr(snv, 3, 3))
+      prime3 <- .flip_base(substr(snv, 4, 4))
       comb_out[[isnv]] <- paste0(ref, alt, prime3, prime5)
     }
   }
@@ -67,7 +67,9 @@ library(BSgenome.Hsapiens.UCSC.hg19)
   combined <- paste0(combined, substr(context, 1, floor(range/2)))
   combined <- paste0(combined, substr(context, ceiling(range/2)+1, range))
   
+
   if(nstrand == 1) combined <- .flip_strand(combined)
+  
 
   count_vector <- rep(0, length(types))
  
@@ -99,7 +101,7 @@ library(BSgenome.Hsapiens.UCSC.hg19)
   types <- rep('', 6*4^(ncontext -1)*nstrand )
   index <- 1
   for(base in base_in){
-    for(alt in components[!grepl('a',components)]){
+    for(alt in components[!grepl(base,components)]){
       for(prime5 in components){
         for(prime3 in components){     
           types[[index]] <- paste0(base, alt, prime5, prime3)
