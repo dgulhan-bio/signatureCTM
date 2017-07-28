@@ -78,7 +78,7 @@ library(BSgenome.Hsapiens.UCSC.hg19)
     L <- 1
     R <- length(types)
     m <- 1
-    while(L < R){
+    while(L <= R){
       m <- floor((L + R)/2)
       if(types[[m]] < snv) L <- m+1
       else if (types[[m]] > snv) R <- m-1
