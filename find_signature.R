@@ -43,37 +43,104 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
   return(error)
 })
 
-setMethod("run.calc", signature(object = "sign.stack"), function(object){
+setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by = "median"){
+  nsig <- object@insts[[1]]@nsig
+  ntype <- dim(object@insts[[1]]@signs)[[1]]
+  ngenome <- dim(object@ints[[1]]@exps)[[1]]
+
+  matrix.all.inst.signs <- rep(0, 0, ntype) 
+  matrix.all.inst.exps <- rep(0, 0, ngenome) 
+
+  for(inst in 1:(object@nsig.max - object@nsig.min)){
+    if(object@insts[[inst]]@nsig != nsig) stop('clustering works on iterations on same number of signs')
+
+    signatures.this <- object@insts[[inst]]@signs
+    exposures.this <- object@insts[[inst]]@exps 
+    matrix.all.inst.signs <- rbind(t(signatures.this))
+    matrix.all.inst.exps <- rbind(exposures.this)
+    rm(signatures.this, exposures.this)
+  }    
+
+  sign.clusters <- kmeans(matrix.all.inst.signs, nsig)
+  
+  median.signs <- matrix(0, ntype, nsig) 
+  median.exps <- matrix(0, nsig, ngenome) 
+  mean.signs <- matrix(0, ntype, nsig)
+  mean.exps <- matrix(0, nsig, ngenome)
+
+  for(isig in 1:nsig){
+    for(itype in 1:ntype){
+      median.signs[itype, isig] <- median(matrix.all.inst.signs[sign.clusters$cluster == isig, itype])
+      mean.signs[itype, isig] <- mean(matrix.all.inst.signs[sign.clusters$cluster == isig, itype]) 
+    }
+    for(igenome in 1:ngenome){
+      median.exps[isig, igenome] <- median(matrix.all.inst.exps[sign.clusters$cluster, igenome])
+      mean.exps[isig, igenome] <- mean(matrix.all.inst.exps[sign.clusters$cluster, igenome])
+    }
+  }
+
+  exp.clusters <- kmeans(matrix.all.inst.exps, nsig)
+
+  cluster.centers <- new("sign.inst")
+  if(by == "median"){
+    cluster.centers@signs <- t(median.signs)
+    cluster.centers@exps <- t(median.exps)
+  }else if(by == "mean"){
+    cluster.centers@signs <- t(mean.signs)
+    cluster.centers@exps <- t(mean.exps)
+  }
+  cluster.centers@nsig <- nsig
+  
+  return(cluster.centers)
+})
+
+setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster = FALSE, n.iter = 100, by = "median"){
   index <- 1
   input.matrix <- t(as.matrix(object@input.dtm))
   for(isig in seq(from = object@nsig.min, to = object@nsig.max, by = object@nsig.step)){
     min.err <- 1000
-    min.inst <- new('sign.stack')
-    print(sprintf('signature %d', isig))
-    for(iter in 1:100){
+    min.inst <- new("sign.inst")
+    print(sprintf("signature %d", isig))
+    if(cluster){
+      stack.tmp <- new("sign.stack")
+      stack.tmp <- set.stack(inst.tmp, input.dtm = dtm, nsig.min = 1, nsig.max = n.iter)
+    }
+    for(iter in 1:n.iter){
+      inst.tmp <- new("sign.inst")
+      inst.tmp@nsig <- isig
       if(object@method == "ctm"){
-        inst.method <- CTM(object@input.dtm, isig, method = "VEM", control = list( cg = (list (iter.max = 1000L, tol = 10^-4))))
-        object@insts[[index]]@method <- new('topic.mod.obj', ctm = inst.method)
+        inst.method <- CTM(object@input.dtm, isig, method = "VEM", control = list( cg = (list (iter.max = 2000L, tol = 10^-4))))
+        inst.tmp@method <- new('topic.mod.obj', ctm = inst.method)
       }else if(object@method == "lda"){
         inst.method <- LDA(object@input.dtm, isig, method = "Gibbs")
-        object@insts[[index]]@method <- new('topic.mod.obj', lda = inst.method)
+        inst.tmp@method <- new('topic.mod.obj', lda = inst.method)
       }else stop(sprintf('invalid method %s', object@method))
 
       beta<-slot(inst.method, 'beta')
       gamma<-slot(inst.method, 'gamma')
-      object@insts[[index]]@signs <- exp(t(beta))
-      object@insts[[index]]@exps <- t(gamma)
-      error <- calc.frob.error(object@insts[[index]], input.matrix)
-      object@insts[[index]]@frob.err <- error
+      inst.tmp@signs <- exp(t(beta))
+      inst.tmp@exps <- t(gamma)
+      error <- calc.frob.error(inst.tmp, input.matrix)
+      inst.tmp@frob.err <- error
 
+      object@insts[[index]]@frob.err <- error
+      if(cluster){
+        stack.tmp@insts[[iter]] <- inst.tmp
+      }
       if(error < min.err){
         min.err <- error
-        min.inst <- object@insts[[index]]
+        min.inst <- inst.tmp
       }
     }
-    object@insts[[index]] <- min.inst
+    if(cluster){
+      cluster.center <- cluster.signs(stack.tmp, by)
+      object@insts[[index]] <- cluster.center
+      rm(stack.tmp)
+    }else{
+      object@insts[[index]] <- min.inst
+    }
     index <- index + 1
-  }
+  }  
   return(object)
 })
 
@@ -115,7 +182,7 @@ setMethod("calc.bic", signature(object = "sign.stack"), function(object){
 
 find_signatures <- function(){
 
-  nsig_max = 6
+  nsig_max = 3
   nsig_min = 2
   
   input_file_list <- 'test.txt'
@@ -129,6 +196,7 @@ find_signatures <- function(){
   print('calculating bic')
   signature_stack <- calc.bic(signature_stack)
  
+  save(signature_stack, file = "test_output_dim_5_6.Rda") 
   print(signature_stack@num.insts)
   for(index in 1:signature_stack@num.insts){
     inst <- signature_stack@insts[[index]]

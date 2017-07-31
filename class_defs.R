@@ -13,9 +13,6 @@ setClass("sign.inst", representation(nsig = "integer",
                                       silhou.width = "vector",
                                       choice.met = "character"))
 
-setGeneric("set.insts", def = function(object, nsig, signs, exps){
-  standardGeneric("set.insts")
-})
 
 setGeneric("calc.frob.error", def = function(object, input.matrix){
   standardGeneric("calc.frob.error")
@@ -38,7 +35,7 @@ setClass("sign.stack", representation(nsig.min = "integer",
                                      insts = "list",
                                      num.insts = "integer"))
 
-setGeneric("run.calc", def = function(object){
+setGeneric("run.calc", def = function(object, cluster = FALSE, n.iter = 100, by = "median"){
   standardGeneric("run.calc")
 })
 
@@ -60,4 +57,8 @@ setGeneric("calc.perplexity", function(object, new.data){
 
 setGeneric("calc.bic", function(object){
   standardGeneric("calc.bic")
+})
+
+setGeneric("cluster.signs", function(object, by = "median"){
+  standardGeneric("cluster.signs")
 })
