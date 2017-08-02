@@ -1,6 +1,7 @@
 library('tm')
 library('topicmodels')
 library('ggplot2')
+library('fields')
 #source('get_error_frob.R')
 source('class_defs.R')
 source('make_dtm_from_vcf.R')
@@ -28,6 +29,7 @@ setMethod("set.stack", signature(object = "sign.stack"), function(object, input.
 setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, input.matrix){
  exposures <- object@exps
  signatures <- object@signs
+ 
  if(sum(exposures[,1]) == 1){
     for(i in 1:ncol(exposures)){
       exposures[,i] = sum(input.matrix[,i])*exposures[,i]
@@ -35,7 +37,6 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
   }
  
   reco <- signatures %*% exposures
-
   diff <- input.matrix - reco
 
   error <- sqrt(sum(diag(t(diff) %*% (diff))))
@@ -46,23 +47,42 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
 setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by = "median"){
   nsig <- object@insts[[1]]@nsig
   ntype <- dim(object@insts[[1]]@signs)[[1]]
-  ngenome <- dim(object@ints[[1]]@exps)[[1]]
-
+  ngenome <- dim(object@insts[[1]]@exps)[[2]]
+ 
   matrix.all.inst.signs <- rep(0, 0, ntype) 
   matrix.all.inst.exps <- rep(0, 0, ngenome) 
 
-  for(inst in 1:(object@nsig.max - object@nsig.min)){
-    if(object@insts[[inst]]@nsig != nsig) stop('clustering works on iterations on same number of signs')
+  perplexity <- rep(0, object@nsig.max - object@nsig.min + 1)
+  bic <- rep(0, object@nsig.max - object@nsig.min + 1)  
 
+  for(inst in 1:(object@nsig.max - object@nsig.min + 1)){
+ 
+    if(object@insts[[inst]]@nsig != nsig) stop('clustering works on iterations on same number of signs')
+ 
     signatures.this <- object@insts[[inst]]@signs
-    exposures.this <- object@insts[[inst]]@exps 
-    matrix.all.inst.signs <- rbind(t(signatures.this))
-    matrix.all.inst.exps <- rbind(exposures.this)
+    exposures.this <- object@insts[[inst]]@exps
+    perplexity[[inst]] <- calc.perplexity.inst(object@insts[[inst]],  object@input.dtm, object@method)@perplexity
+    bic[[inst]] <- calc.bic.inst(object@insts[[inst]], object@input.dtm, object@method)@bic
+
+    matrix.all.inst.signs <- rbind(matrix.all.inst.signs, t(signatures.this))
+    matrix.all.inst.exps <- rbind(matrix.all.inst.exps, exposures.this)
     rm(signatures.this, exposures.this)
   }    
 
+  mean.perplexity <-  mean(perplexity)
+  median.perplexity <- median(perplexity)
+  sd.perplexity <- sd(perplexity)
+  q1.perplexity <- median(perplexity[perplexity < median.perplexity])
+  q3.perplexity <- median(perplexity[perplexity > median.perplexity])
+
+  mean.bic <- mean(bic)
+  median.bic <- median(bic)
+  sd.bic <- sd(bic)
+
+  q1.bic <- median(bic[bic < median.bic])
+  q3.bic <- median(bic[bic > median.bic])
+
   sign.clusters <- kmeans(matrix.all.inst.signs, nsig)
-  
   median.signs <- matrix(0, ntype, nsig) 
   median.exps <- matrix(0, nsig, ngenome) 
   mean.signs <- matrix(0, ntype, nsig)
@@ -74,21 +94,65 @@ setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by
       mean.signs[itype, isig] <- mean(matrix.all.inst.signs[sign.clusters$cluster == isig, itype]) 
     }
     for(igenome in 1:ngenome){
-      median.exps[isig, igenome] <- median(matrix.all.inst.exps[sign.clusters$cluster, igenome])
-      mean.exps[isig, igenome] <- mean(matrix.all.inst.exps[sign.clusters$cluster, igenome])
+      median.exps[isig, igenome] <- median(matrix.all.inst.exps[sign.clusters$cluster == isig, igenome])
+      mean.exps[isig, igenome] <- mean(matrix.all.inst.exps[sign.clusters$cluster == isig, igenome])
     }
   }
+  
+  #calculate silhouette width
+  dist.for.all <- rdist(matrix.all.inst.signs)
+   
+  silhou.ave <- rep(0, nsig)
+  silhou.sd <- rep(0, nsig)
+  for(isig in 1:nsig){
+    print(sprintf('isig = %d', isig))
 
-  exp.clusters <- kmeans(matrix.all.inst.exps, nsig)
+    si.vec <- rep(0, dim(dist.for.all)[[1]])
+    ai.vec <- rep(0, dim(dist.for.all)[[1]])
+    bi.vec <- rep(0, dim(dist.for.all)[[1]])
+ 
+    indices.clus <- which(sign.clusters$cluster == isig)
+    print(indices.clus)
+    
+    for(iele in indices.clus){
+      clus.dist <- dist.for.all[sign.clusters$cluster == isig, iele]
+  
+      ai <- (length(indices.clus))*mean(clus.dist)/(length(indices.clus) + 1)
+      ai.vec[[iele]] <- ai
+
+      other.dist <- dist.for.all[-indices.clus, iele]
+     
+      bi <- min(other.dist)
+      bi.vec[[iele]] <- bi
+ 
+      si <- 0
+      if(ai < bi) si <- (1 - ai/bi)
+      else if(ai == bi) si <- 0
+      else si <- (bi/ai - 1)
+  
+      si.vec[[iele]] <- si
+    } 
+    print(si.vec)
+    print(si.vec)
+    silhou.ave[[isig]] <- mean(si.vec)   
+    silhou.sd[[isig]] <- sd(si.vec) 
+  }
 
   cluster.centers <- new("sign.inst")
-  if(by == "median"){
-    cluster.centers@signs <- t(median.signs)
-    cluster.centers@exps <- t(median.exps)
-  }else if(by == "mean"){
-    cluster.centers@signs <- t(mean.signs)
-    cluster.centers@exps <- t(mean.exps)
-  }
+  cluster.centers@signs <- (median.signs)
+  cluster.centers@exps <- (median.exps)
+  cluster.centers@perp.mean <- mean.perplexity
+  cluster.centers@perp.median <- median.perplexity
+  cluster.centers@perp.sd <- sd.perplexity
+  cluster.centers@perp.q1 <- q1.perplexity
+  cluster.centers@perp.q3 <- q3.perplexity
+  cluster.centers@bic.mean <- median.bic
+  cluster.centers@bic.median <- median.bic
+  cluster.centers@bic.sd <- sd.bic
+  cluster.centers@bic.q1 <- q1.bic
+  cluster.centers@bic.q3 <- q3.bic
+  cluster.centers@silhou.width <- silhou.ave
+  cluster.centers@silhou.width.sd <- silhou.sd
   cluster.centers@nsig <- nsig
   
   return(cluster.centers)
@@ -103,16 +167,16 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
     print(sprintf("signature %d", isig))
     if(cluster){
       stack.tmp <- new("sign.stack")
-      stack.tmp <- set.stack(inst.tmp, input.dtm = dtm, nsig.min = 1, nsig.max = n.iter)
+      stack.tmp <- set.stack(stack.tmp, input.dtm = dtm, nsig.min = 1, nsig.max = n.iter)
     }
     for(iter in 1:n.iter){
       inst.tmp <- new("sign.inst")
       inst.tmp@nsig <- isig
       if(object@method == "ctm"){
-        inst.method <- CTM(object@input.dtm, isig, method = "VEM", control = list( cg = (list (iter.max = 2000L, tol = 10^-4))))
+        inst.method <- CTM(object@input.dtm, isig, method = "VEM", control = list( cg = (list (iter.max = 1000L, tol = 10^-4)), seed = iter + 2000))
         inst.tmp@method <- new('topic.mod.obj', ctm = inst.method)
       }else if(object@method == "lda"){
-        inst.method <- LDA(object@input.dtm, isig, method = "Gibbs")
+        inst.method <- LDA(object@input.dtm, isig, method = "Gibbs", control = list(seed = iter + 3000))
         inst.tmp@method <- new('topic.mod.obj', lda = inst.method)
       }else stop(sprintf('invalid method %s', object@method))
 
@@ -132,15 +196,19 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
         min.inst <- inst.tmp
       }
     }
+
     if(cluster){
       cluster.center <- cluster.signs(stack.tmp, by)
       object@insts[[index]] <- cluster.center
+      print(dim(input.matrix))
+      object@insts[[index]]@frob.err <- calc.frob.error(cluster.center, input.matrix)
       rm(stack.tmp)
     }else{
       object@insts[[index]] <- min.inst
     }
     index <- index + 1
   }  
+  rm(input.matrix)
   return(object)
 })
 
@@ -163,13 +231,14 @@ setMethod("calc.bic.inst", signature(object = "sign.inst"), function(object, inp
   if(method.desc == "ctm") method <- object@method@ctm
   else if(method.desc == "lda") method <- object@method@lda
   else stop(sprintf('invalid method %s', method.desc))
-   
+  
   ngenome <- input.dtm$nrow
   ntype <- input.dtm$ncol
   nsig <- object@nsig
-
+  
   bic <- (2*as.numeric(logLik(method))) - (ngenome + ntype)*log(ngenome)*nsig
   object@bic <- bic
+
   return(object)
 })
 
@@ -185,18 +254,18 @@ find_signatures <- function(){
   nsig_max = 3
   nsig_min = 2
   
-  input_file_list <- 'test.txt'
+  input_file_list <- 'test_small.txt'
   dtm <- make_dtm_from_vcf_list(input_file_list)
   
   signature_stack <- new("sign.stack")
   signature_stack <- set.stack(signature_stack, input.dtm = dtm, nsig.min = nsig_min, nsig.max = nsig_max)
-  signature_stack <- run.calc(signature_stack)
-  print('calculating perplexity')
-  signature_stack <- calc.perplexity(signature_stack, dtm)
-  print('calculating bic')
-  signature_stack <- calc.bic(signature_stack)
+  signature_stack <- run.calc(signature_stack, cluster = TRUE)
+#  print('calculating perplexity')
+#  signature_stack <- calc.perplexity(signature_stack, dtm)
+#  print('calculating bic')
+#  signature_stack <- calc.bic(signature_stack)
  
-  save(signature_stack, file = "test_output_dim_5_6.Rda") 
+  save(signature_stack, file = "test_output_dim_2_6_sil.Rda") 
   print(signature_stack@num.insts)
   for(index in 1:signature_stack@num.insts){
     inst <- signature_stack@insts[[index]]
