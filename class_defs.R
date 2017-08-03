@@ -6,26 +6,38 @@ setClass("topic.mod.obj", representation(ctm = "CTM_VEM", lda = "LDA_VEM"))
 setClass("sign.inst", representation(nsig = "integer",
                                       signs= "matrix", 
                                       exps = "matrix", 
+                                      mean.signs= "matrix", 
+                                      mean.exps = "matrix", 
+                                      q1.signs= "matrix", 
+                                      q1.exps = "matrix", 
+                                      q3.signs= "matrix", 
+                                      q3.exps = "matrix", 
                                       method = "topic.mod.obj",
                                       perplexity = "numeric",  
-                                      bic = "numeric", 
                                       perp.mean = "numeric",
                                       perp.median = "numeric",
                                       perp.sd = "numeric",
                                       perp.q1 = "numeric",
                                       perp.q3 = "numeric",
+                                      bic = "numeric", 
                                       bic.mean = "numeric",
                                       bic.median = "numeric",
                                       bic.sd = "numeric",
                                       bic.q1 = "numeric",
                                       bic.q3 = "numeric",
                                       frob.err = "numeric", 
+                                      frob.err.mean = "numeric", 
+                                      frob.err.q1 = "numeric", 
+                                      frob.err.q3 = "numeric", 
                                       silhou.width = "vector",
                                       silhou.width.sd = "vector",
+                                      silhou.width.mean = "vector",
+                                      silhou.width.q1 = "vector",
+                                      silhou.width.q3 = "vector",
                                       choice.met = "character"))
 
 
-setGeneric("calc.frob.error", def = function(object, input.matrix){
+setGeneric("calc.frob.error", def = function(object, input.matrix, by = "median"){
   standardGeneric("calc.frob.error")
 })
 
@@ -42,8 +54,10 @@ setClass("sign.stack", representation(nsig.min = "integer",
                                      nsig.max = "integer", 
                                      method = "character", 
                                      input.dtm = "DocumentTermMatrix", 
+                                     input.matrix = "matrix",
                                      types = "vector", 
                                      insts = "list",
+                                     min.insts = "list",
                                      num.insts = "integer"))
 
 setGeneric("run.calc", def = function(object, cluster = FALSE, n.iter = 100, by = "median"){
