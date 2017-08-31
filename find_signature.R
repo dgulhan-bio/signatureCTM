@@ -56,7 +56,7 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
   return(error)
 })
 
-setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by = "median"){
+setMethod("cluster.signs", signature(object = "sign.stack"), function(object){
   nsig <- object@insts[[1]]@nsig
   ntype <- dim(object@insts[[1]]@signs)[[1]]
   ngenome <- dim(object@insts[[1]]@exps)[[2]]
@@ -74,15 +74,14 @@ setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by
     
     signatures.this <- object@insts[[inst]]@signs
     exposures.this <- object@insts[[inst]]@exps
-    save(object, file = 'debug.Rda')
-    perplexity[[inst]] <- calc.perplexity.inst(object@insts[[inst]],  object@input.dtm, object@method)@perplexity
+    perplexity[[inst]] <- calc.perplexity.inst(object@insts[[inst]],  object@input.dtm, object@method)
     bic[[inst]] <- calc.bic.inst(object@insts[[inst]], object@input.dtm, object@method)@bic
     matrix.all.inst.signs <- rbind(matrix.all.inst.signs, t(signatures.this))
     matrix.all.inst.exps <- rbind(matrix.all.inst.exps, exposures.this)
     rm(signatures.this, exposures.this)
   }    
 
-  sign.clusters <- kmeans(matrix.all.inst.signs, nsig)
+  sign.clusters <- kmeans(matrix.all.inst.signs, nsig, nstart = 20)
 
   #calculate silhouette width
   dist.for.all <- rdist(matrix.all.inst.signs)
@@ -150,6 +149,7 @@ setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by
     silhou.q1[[isig]] <- median(si.vec[si.vec < median(si.vec)])
     silhou.q3[[isig]] <- median(si.vec[si.vec > median(si.vec)])
   }
+
   save(matrix.all.inst.signs, matrix.all.inst.exps, file = sprintf("sign_stack_simul_lda_nsig%d.Rda",nsig))
 
 #  print('indices.filtered')
@@ -272,7 +272,7 @@ setMethod("cluster.signs", signature(object = "sign.stack"), function(object, by
   return(cluster.centers)
 })
 
-setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster = FALSE, n.iter = 50, by = "median"){
+setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster = FALSE, n.iter = 200){
   index <- 1
   input.matrix <- t(as.matrix(object@input.dtm))
   object@input.matrix <- input.matrix
@@ -316,6 +316,7 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
     }
     
     if(cluster){
+      save(stack.tmp, file = "test.Rda")
       cluster.center <- cluster.signs(stack.tmp)
       object@insts[[index]] <- cluster.center
       object@insts[[index]]@frob.err <- calc.frob.error(cluster.center, input.matrix)
@@ -329,12 +330,12 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
     object@min.insts[[index]]@frob.err.mean <- object@min.insts[[index]]@frob.err
     object@min.insts[[index]]@frob.err.q1 <- object@min.insts[[index]]@frob.err
     object@min.insts[[index]]@frob.err.q3 <- object@min.insts[[index]]@frob.err
-    object@min.insts[[index]]@perp.median <- calc.perplexity.inst(min.inst,  object@input.dtm, object@method)@perplexity
-    print(calc.perplexity.inst(min.inst,  object@input.dtm, object@method)@perplexity)
-    object@min.insts[[index]]@perp.mean <- object@min.insts[[index]]@perp.mean
+    object@min.insts[[index]]@perp.median <- calc.perplexity.inst(min.inst,  object@input.dtm, object@method)
+    print(calc.perplexity.inst(min.inst,  object@input.dtm, object@method))
+    object@min.insts[[index]]@perp.mean <- object@min.insts[[index]]@perp.median
     object@min.insts[[index]]@perp.q1 <- object@min.insts[[index]]@perp.q1
     object@min.insts[[index]]@perp.q3 <- object@min.insts[[index]]@perp.q3
-    object@min.insts[[index]]@bic <- calc.bic.inst(min.inst, object@input.dtm, object@method)@bic
+    object@min.insts[[index]]@bic <- calc.bic.inst(min.inst, object@input.dtm, object@method)
     object@min.insts[[index]]@bic.mean <- object@min.insts[[index]]@bic
     object@min.insts[[index]]@bic.q1 <- object@min.insts[[index]]@bic
     object@min.insts[[index]]@bic.q3 <- object@min.insts[[index]]@bic
@@ -360,10 +361,11 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
 })
 
 setMethod("calc.perplexity.inst", signature(object = "sign.inst"), function(object, new.data, method.desc){
-  if(method.desc == "ctm") object@perplexity <- perplexity(object@method@ctm, new.data)
-  else if(method.desc == "lda") object@perplexity <- perplexity(object@method@lda, new.data) 
+  perplexity <- 0
+  if(method.desc == "ctm") perplexity <- perplexity(object@method@ctm, new.data)
+  else if(method.desc == "lda") perplexity <- perplexity(object@method@lda, new.data) 
   else stop(sprintf('invalid method %s', method.desc))
-  return(object)
+  return(perplexity)
 })
 
 setMethod("calc.perplexity", signature(object = "sign.stack"), function(object, new.data){
@@ -384,9 +386,8 @@ setMethod("calc.bic.inst", signature(object = "sign.inst"), function(object, inp
   nsig <- object@nsig
   
   bic <- (2*as.numeric(logLik(method))) - (ngenome + ntype)*log(ngenome)*nsig
-  object@bic <- bic
 
-  return(object)
+  return(bic)
 })
 
 setMethod("calc.bic", signature(object = "sign.stack"), function(object){
@@ -399,7 +400,7 @@ setMethod("calc.bic", signature(object = "sign.stack"), function(object){
 find_signatures <- function(){
 
   nsig_max = 9
-  nsig_min = 8
+  nsig_min = 2
   
 #  input_file_list <- 'test.txt'
 #  dtm <- make_dtm_from_vcf_list(input_file_list)
@@ -411,18 +412,18 @@ find_signatures <- function(){
   signature_stack <- new("sign.stack") 
   str(dtm)
 
-  signature_stack <- set.stack(signature_stack, input.dtm = dtm, nsig.min = nsig_min, nsig.max = nsig_max, method = "ctm") 
+  signature_stack <- set.stack(signature_stack, input.dtm = dtm, nsig.min = nsig_min, nsig.max = nsig_max, method = "lda") 
   signature_stack <- run.calc(signature_stack, cluster = TRUE) 
   # print('calculatingperplexity') 
   # signature_stack <- calc.perplexity(signature_stack,dtm) 
   # print('calculating bic') 
   # signature_stack <- calc.bic(signature_stack)
  
-  save(signature_stack, file = "test_output_kidney_dim_6_7_sil_min_context3.Rda") 
+  save(signature_stack, file = "test_output_kidney_dim_2_9_lda_sil_min_context3.Rda") 
   print(signature_stack@num.insts)
   for(index in 1:signature_stack@num.insts){
     inst <- signature_stack@insts[[index]]
-    print(sprintf('nsig: %d, error: %.3f, perplexity: %.3f, bic %.0f', inst@nsig, inst@frob.err, inst@perplexity, inst@bic))
+    print(sprintf('nsig: %d, error: %.3f, perplexity: %.3f, bic %.0f', inst@nsig, inst@frob.err, inst@mean.perp, inst@bic))
   } 
   rm(signature_stack)
 }
