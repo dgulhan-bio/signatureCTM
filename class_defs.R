@@ -1,7 +1,7 @@
 library(tm)
 library(topicmodels)
 
-setClass("topic.mod.obj", representation(ctm = "CTM_VEM", lda = "LDA_VEM"))
+setClass("topic.mod.obj", representation(ctm = "CTM_VEM", lda = "LDA_Gibbs"))
 
 setClass("sign.inst", representation(nsig = "integer",
                                       signs= "matrix", 
@@ -49,6 +49,23 @@ setGeneric("calc.bic.inst", function(object, input.dtm, method.desc){
   standardGeneric("calc.bic.inst")
 })
 
+setGeneric(".same.dim", function(object, nsig.comp){
+  standardGeneric(".same.dim")
+}
+
+setGeneric("get.signs", function(object)){
+  standardGeneric("get.signs")
+}
+
+setGeneric("get.exps", function(object)){
+  standardGeneric("get.exps")
+}
+
+setGeneric("get.frob.err", function(object)){
+  standardGeneric("get.frob.error")
+}
+
+
 setClass("sign.stack", representation(nsig.min = "integer", 
                                      nsig.step = "integer", 
                                      nsig.max = "integer", 
@@ -60,7 +77,7 @@ setClass("sign.stack", representation(nsig.min = "integer",
                                      min.insts = "list",
                                      num.insts = "integer"))
 
-setGeneric("run.calc", def = function(object, cluster = FALSE, n.iter = 100, by = "median"){
+setGeneric("run.calc", def = function(object, cluster = FALSE, n.iter = 100){
   standardGeneric("run.calc")
 })
 
@@ -84,6 +101,6 @@ setGeneric("calc.bic", function(object){
   standardGeneric("calc.bic")
 })
 
-setGeneric("cluster.signs", function(object, by = "median"){
+setGeneric("cluster.signs", function(object){
   standardGeneric("cluster.signs")
 })
