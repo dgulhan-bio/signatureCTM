@@ -4,40 +4,15 @@ library(topicmodels)
 setClass("topic.mod.obj", representation(ctm = "CTM_VEM", lda = "LDA_Gibbs"))
 
 setClass("sign.inst", representation(nsig = "integer",
-                                      signs= "matrix", 
-                                      exps = "matrix", 
-                                      mean.signs= "matrix", 
-                                      mean.exps = "matrix", 
-                                      q1.signs= "matrix", 
-                                      q1.exps = "matrix", 
-                                      q3.signs= "matrix", 
-                                      q3.exps = "matrix", 
-                                      method = "topic.mod.obj",
-                                      perplexity = "numeric",  
-                                      perp.mean = "numeric",
-                                      perp.median = "numeric",
-                                      perp.sd = "numeric",
-                                      perp.q1 = "numeric",
-                                      perp.q3 = "numeric",
-                                      bic = "numeric", 
-                                      bic.mean = "numeric",
-                                      bic.median = "numeric",
-                                      bic.sd = "numeric",
-                                      bic.q1 = "numeric",
-                                      bic.q3 = "numeric",
-                                      frob.err = "numeric", 
-                                      frob.err.mean = "numeric", 
-                                      frob.err.q1 = "numeric", 
-                                      frob.err.q3 = "numeric", 
-                                      silhou.width = "vector",
-                                      silhou.width.sd = "vector",
-                                      silhou.width.mean = "vector",
-                                      silhou.width.q1 = "vector",
-                                      silhou.width.q3 = "vector",
-                                      choice.met = "character"))
+                                     signs= "list", 
+                                     exps = "list",  
+                                     method = "topic.mod.obj",
+                                     perp = "list", 
+                                     bic = "list",
+                                     frob.err = "list", 
+                                     silhou.width = "list"))
 
-
-setGeneric("calc.frob.error", def = function(object, input.matrix, by = "median"){
+setGeneric("calc.frob.error", def = function(object, input.matrix){
   standardGeneric("calc.frob.error")
 })
 
@@ -51,19 +26,19 @@ setGeneric("calc.bic.inst", function(object, input.dtm, method.desc){
 
 setGeneric(".same.dim", function(object, nsig.comp){
   standardGeneric(".same.dim")
-}
+})
 
-setGeneric("get.signs", function(object)){
+setGeneric("get.signs", function(object, by = "inst"){
   standardGeneric("get.signs")
-}
+})
 
-setGeneric("get.exps", function(object)){
+setGeneric("get.exps", function(object, by = "inst"){
   standardGeneric("get.exps")
-}
+})
 
-setGeneric("get.frob.err", function(object)){
-  standardGeneric("get.frob.error")
-}
+setGeneric("get.frob.err", function(object, by = "inst"){
+  standardGeneric("get.frob.err")
+})
 
 
 setClass("sign.stack", representation(nsig.min = "integer", 

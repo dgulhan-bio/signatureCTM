@@ -27,147 +27,107 @@ setMethod("set.stack", signature(object = "sign.stack"), function(object, input.
   return(object)
 })
 
-setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, input.matrix, by = "median"){
- exposures <- object@exps
- signatures <- object@signs
+setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, input.matrix){
+  by <- names(object@signs)
+  error.list <- list()
+  str(object@exps)
 
- if(by == "mean"){ 
-   exposures <- object@mean.exps
-   signatures <- object@mean.signs
- }else if(by == "q1"){
-   exposures <- object@q1.exps
-   signatures <- object@q1.signs
- }else if(by == "q3"){
-   exposures <- object@q3.exps
-   signatures <- object@q3.signs
- }
+  for(icalc in length(by)){
+    exposures <- object@exps[[icalc]]
+    signatures <- object@signs[[icalc]]
 
- if(round(sum(exposures[,1]), digit = 0) == 1){
-    for(i in 1:ncol(exposures)){
-      exposures[,i] = sum(input.matrix[,i])*exposures[,i]
+    if(round(sum(exposures[,1]), digit = 0) == 1){
+      for(i in 1:ncol(exposures)){
+        exposures[,i] = sum(input.matrix[,i])*exposures[,i]
+      }
     }
-  }
  
-  reco <- signatures %*% exposures
-  diff <- input.matrix - reco
+    reco <- signatures %*% exposures
+    diff <- input.matrix - reco
+    error <- sqrt(sum(diag(t(diff) %*% (diff))))
+    error <- error/sqrt(sum(diag(t(input.matrix) %*% (input.matrix))))
 
-  error <- sqrt(sum(diag(t(diff) %*% (diff))))
-  error <- error/sqrt(sum(diag(t(input.matrix) %*% (input.matrix))))
-  return(error)
+    error.list[[by[[icalc]]]] <- error
+  }
+
+  return(error.list)
+})
+
+setMethod(".same.dim", signature(object = "sign.inst"), function(object, nsig.comp){
+  return(object@nsig != nsig.comp)
+})
+
+setMethod("get.signs", signature(object = "sign.inst"), function(object, by = "inst"){
+  return(object@signs[by])
+})
+
+setMethod("get.exps", signature(object = "sign.inst"), function(object, by = "inst"){
+  return(object@exps[by])
+})
+
+setMethod("get.frob.err", signature(object = "sign.inst"), function(object, by = "inst"){
+  return(object@frob.err[by])
 })
 
 setMethod("cluster.signs", signature(object = "sign.stack"), function(object){
   nsig <- object@insts[[1]]@nsig
-  ntype <- dim(object@insts[[1]]@signs)[[1]]
-  ngenome <- dim(object@insts[[1]]@exps)[[2]]
- 
-  matrix.all.inst.signs <- matrix(0, 0, ntype) 
-  matrix.all.inst.exps <- matrix(0, 0, ngenome) 
+  ntype <- dim(object@insts[[1]]@signs$inst)[[1]]
+  ngenome <- dim(object@insts[[1]]@exps$inst)[[2]]
+
+  matrix.all.inst.signs <- matrix(0, 0, ntype)
+  matrix.all.inst.exps <- matrix(0, 0, ngenome)
 
   perplexity <- rep(0, object@nsig.max - object@nsig.min + 1)
-  bic <- rep(0, object@nsig.max - object@nsig.min + 1)  
+  bic <- rep(0, object@nsig.max - object@nsig.min + 1)
   print(sprintf('total insts: %d', object@nsig.max - object@nsig.min + 1))
 
-  for(inst in 1:(object@nsig.max - object@nsig.min + 1)){ 
-    if(object@insts[[inst]]@nsig != nsig) stop('clustering works on iterations on same number of signs')
-    if(object@insts[[inst]]@frob.err > 0.4) next
-    
-    signatures.this <- object@insts[[inst]]@signs
-    exposures.this <- object@insts[[inst]]@exps
-    perplexity[[inst]] <- calc.perplexity.inst(object@insts[[inst]],  object@input.dtm, object@method)
-    bic[[inst]] <- calc.bic.inst(object@insts[[inst]], object@input.dtm, object@method)@bic
-    matrix.all.inst.signs <- rbind(matrix.all.inst.signs, t(signatures.this))
-    matrix.all.inst.exps <- rbind(matrix.all.inst.exps, exposures.this)
-    rm(signatures.this, exposures.this)
-  }    
+  if(sum(sapply(object@insts, .same.dim, nsig.comp = nsig)) != 0) stop('clustering works on iterations on same number of sign\
+s')
+  perplexity <- sapply(object@insts, calc.perplexity.inst, new.data = object@input.dtm, method.desc = object@method)
+  bic <- sapply(object@insts, calc.bic.inst, input.dtm = object@input.dtm, method.desc = object@method)
+
+  matrix.all.inst.signs <- sapply(object@insts, get.signs)
+  matrix.all.inst.exps <- sapply(object@insts, get.exps)
+   
+  dim(matrix.all.inst.signs)
+
+  error.vector <- sapply(object@insts, get.frob.err)
+  error.vector <- as.vector(sapply(error.vec, rep, times = nsig))
+
+  matrix.all.inst.signs <- matrix.all.inst.signs[-error.vector,]
+  matrix.all.inst.exps <- matrix.all.inst.exps[-error.vector,]
 
   sign.clusters <- kmeans(matrix.all.inst.signs, nsig, nstart = 20)
 
   #calculate silhouette width
   dist.for.all <- rdist(matrix.all.inst.signs)
-   
-  silhou.ave <- rep(0, nsig)
-  silhou.sd <- rep(0, nsig)
-  silhou.mean <- rep(0, nsig)
-  silhou.median <- rep(0, nsig)
-  silhou.q1 <- rep(0, nsig)
-  silhou.q3 <- rep(0, nsig)
 
-#  if(exists('indices.filtered')) rm(indices.filtered)
-   
- 
+  sd.silhou.sd <- rep(0, nsig)
+  mean.silhou <- rep(0, nsig)
+  median.silhou <- rep(0, nsig)
+  q1.silhou <- rep(0, nsig)
+  q3.silhou <- rep(0, nsig)
+
   for(isig in 1:nsig){
- 
     indices.clus <- which(sign.clusters$cluster == isig)
+    dist.same.clus <- dist.for.all[indices.clus,]
+    dist.other.clus <- dist.for.all[-indices.clus,]
 
-    si.vec <- rep(0, length(indices.clus))
-    ai.vec <- rep(0, length(indices.clus))
-    bi.vec <- rep(0, length(indices.clus))
+    ai.vec <- (length(indices.clus)*apply(dist.same.clus, 2, mean)/(length(indices.clus) + 1))[indices.clus]
+    bi.vec <- apply(dist.other.clus, 2, min)[indices.clus]
+    f.sil <- function(x,y){
+      if(x < y) return( 1- x/y)
+      else if(x == y) return(0)
+      else return(y/x - 1)
+    }
+    si.vec <- mapply(f.sil, ai.vec, bi.vec)
 
-    count <- 1
-    
-    for(iele in indices.clus){
-      clus.dist <- dist.for.all[sign.clusters$cluster == isig, iele]
-  
-      ai <- (length(indices.clus))*mean(clus.dist)/(length(indices.clus) + 1)
-      ai.vec[[count]] <- ai
-
-      other.dist <- dist.for.all[-indices.clus, iele]
-     
-      bi <- min(other.dist)
-      bi.vec[[count]] <- bi
- 
-      si <- 0
-      if(ai < bi) si <- (1 - ai/bi)
-      else if(ai == bi) si <- 0
-      else si <- (bi/ai - 1)
-  
-      si.vec[[count]] <- si
-
-      count <- count + 1
-    } 
-    
-#    indices.gt.q1 <- (si.vec > median(si.vec))
-#    indices.gt.q1 <- (si.vec > median(si.vec[si.vec < median(si.vec)]))
-#    indices.gt.q1 <- (si.vec > median(si.vec[si.vec > median(si.vec)]))
-    
-#    cropped.si <- si.vec[indices.gt.q1]
-    
-#    print(indices.clus[indices.gt.q1])
-#    if(exists('indices.filtered')) indices.filtered <- c(indices.filtered, indices.clus[indices.gt.q1])
-#    else indices.filtered <- indices.clus[indices.gt.q1]
-
-#    print(indices.gt.q1)
-    
-    #print('si.vec')
-    #print(si.vec)
-    #print('ai.vec')
-    #print(ai.vec)
-    silhou.ave[[isig]] <- mean(si.vec)   
-    silhou.sd[[isig]] <- sd(si.vec) 
-    silhou.median[[isig]] <- median(si.vec)
-    silhou.q1[[isig]] <- median(si.vec[si.vec < median(si.vec)])
-    silhou.q3[[isig]] <- median(si.vec[si.vec > median(si.vec)])
+    mean.silhou[[isig]] <- mean(si.vec)
+    sd.silhou.sd[[isig]] <- sd(si.vec)
+    median.silhou[[isig]] <- median(si.vec)
+    q1.silhou[[isig]] <- median(si.vec[si.vec < median(si.vec)])
+    q3.silhou[[isig]] <- median(si.vec[si.vec > median(si.vec)])
   }
-
-  save(matrix.all.inst.signs, matrix.all.inst.exps, file = sprintf("sign_stack_simul_lda_nsig%d.Rda",nsig))
-
-#  print('indices.filtered')
-#  print(indices.filtered)
-#  indices.filtered <- sort(indices.filtered)
-#  perplexity <- perplexity[unique(round(indices.filtered/nsig))]
-#  bic <- bic[unique(round(indices.filtered/nsig))]
-  
-#  print('indices')
-#  print(indices.filtered)
-  print('matrix all')
-  print(dim(matrix.all.inst.signs))
-#  matrix.all.inst.signs <- matrix.all.inst.signs[indices.filtered, ]
-  print(dim(matrix.all.inst.signs))
-  print('silhou.q1')
-  print(silhou.q1)
-  print('perplexity')
-  print(perplexity)
 
   mean.perplexity <-  mean(perplexity)
   median.perplexity <- median(perplexity)
@@ -181,98 +141,63 @@ setMethod("cluster.signs", signature(object = "sign.stack"), function(object){
   q1.bic <- median(bic[bic < median.bic])
   q3.bic <- median(bic[bic > median.bic])
 
-  print('second clustering')
-  sign.clusters <- kmeans(matrix.all.inst.signs, nsig)
-  median.signs <- matrix(0, ntype, nsig) 
+  median.signs <- matrix(0, ntype, nsig)
   mean.signs <- matrix(0, ntype, nsig)
   q1.signs <- matrix(0, ntype, nsig)
-  q3.signs <- matrix(0, ntype, nsig) 
-  median.exps <- matrix(0, nsig, ngenome) 
+  q3.signs <- matrix(0, ntype, nsig)
+  median.exps <- matrix(0, nsig, ngenome)
   mean.exps <- matrix(0, nsig, ngenome)
   q1.exps <- matrix(0, nsig, ngenome)
-  q3.exps <- matrix(0, nsig, ngenome) 
-  
-#  indices.closest.to.median <- rep(0, nsig)
-#  indices.closest.to.mean <- rep(0, nsig)
-#  indices.closest.to.q1 <- rep(0, nsig)
-#  indices.closest.to.q3 <- rep(0, nsig)
-  
+  q3.exps <- matrix(0, nsig, ngenome)
+
   for(isig in 1:nsig){
     matrix.inst <- matrix.all.inst.signs[sign.clusters$cluster == isig,]
-    
-    for(itype in 1:ntype){
-      matrix.inst.type <- matrix.inst[, itype]
-      median.signs[itype, isig] <- median(matrix.inst.type)
-      mean.signs[itype, isig] <- mean(matrix.inst.type)       
-      q1.signs[itype, isig] <- median(matrix.inst.type[matrix.inst.type < median.signs[itype, isig]])
-      q3.signs[itype, isig] <- median(matrix.inst.type[matrix.inst.type > median.signs[itype, isig]])
-    }
-    
-    dist.to.median <- apply(matrix.all.inst.signs, 1, function(x)sqrt(sum((x - median.signs[,isig])^2)))
-    dist.to.mean <- apply(matrix.all.inst.signs, 1, function(x)sqrt(sum((x - mean.signs[,isig])^2)))
-    dist.to.q1 <- apply(matrix.all.inst.signs, 1, function(x)sqrt(sum((x - q1.signs[,isig])^2)))
-    dist.to.q3 <- apply(matrix.all.inst.signs, 1, function(x)sqrt(sum((x - q3.signs[,isig])^2)))
-     
-    print(sprintf('min.dist.to.mean %f', min(dist.to.median)))
-    
-#    indices.closest.to.median[[isig]] <- which(dist.to.median == min(dist.to.median))
-#    indices.closest.to.mean[[isig]] <- which(dist.to.mean == min(dist.to.mean))
-#    indices.closest.to.q1[[isig]] <- which(dist.to.q1 == min(dist.to.q1))
-#    indices.closest.to.q3[[isig]] <- which(dist.to.q3 == min(dist.to.q3))
-   
-#    median.exps[isig, ] <- matrix.all.inst.exps[indices.closest.to.median[[isig]],]
-#    mean.exps[isig, ] <- matrix.all.inst.exps[indices.closest.to.mean[[isig]],]
-#    q1.exps[isig, ] <- matrix.all.inst.exps[indices.closest.to.q1[[isig]],]
-#    q3.exps[isig, ] <- matrix.all.inst.exps[indices.closest.to.q3[[isig]],]
-
-#    for(igenome in 1:ngenome){
-#      matrix.inst.genome <- matrix.all.inst.exps[sign.clusters$cluster == isig, igenome]
-#      median.exps[isig, igenome] <- median(matrix.inst.genome)
-#      mean.exps[isig, igenome] <- mean(matrix.inst.genome)
-#      q1.exps[isig, igenome] <- median(matrix.inst.genome[matrix.inst.genome < median.exps[isig, igenome]])
-#      q3.exps[isig, igenome] <- median(matrix.inst.genome[matrix.inst.genome > median.exps[isig, igenome]])
-#    }
+    median.signs[,isig] <- apply(matrix.inst, 1, median)
+    mean.signs[,isig] <- apply(matrix.inst, 1, mean)
+    matrix.inst < median.signs
+    q1.signs[,isig] <- apply(matrix.inst, 1, function(x, median.signs) median(x[x < median.signs]), median.signs = median.signs[,isig])
+    q3.signs[,isig] <- apply(matrix.inst, 1, function(x, median.signs) median(x[x > median.signs]), median.signs = median.signs[,isig])
   }
-
-  for(igenome in 1:ngenome){
-    median.exps[, igenome] <- coef(nnls(median.signs, object@input.matrix[,igenome]))
-    mean.exps[, igenome] <- coef(nnls(mean.signs, object@input.matrix[,igenome]))
-    q1.exps[, igenome] <- coef(nnls(q1.signs, object@input.matrix[,igenome]))
-    q3.exps[, igenome] <- coef(nnls(q3.signs, object@input.matrix[,igenome]))
-  }
-
-
+  median.exps <- mapply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = median.signs)
+  mean.exps <- mapply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = mean.signs)
+  mean.exps <- mapply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q1.signs)
+  mean.exps <- mapply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q3.signs)
 
   cluster.centers <- new("sign.inst")
-  cluster.centers@signs <- median.signs
-  cluster.centers@exps <- median.exps
-  cluster.centers@mean.signs <- mean.signs
-  cluster.centers@mean.exps <- mean.exps
-  cluster.centers@q1.signs <- q1.signs
-  cluster.centers@q1.exps <- q1.exps
-  cluster.centers@q3.signs <- q3.signs
-  cluster.centers@q3.exps <- q3.exps
-  cluster.centers@perp.mean <- mean.perplexity
-  cluster.centers@perp.median <- median.perplexity
-  cluster.centers@perp.sd <- sd.perplexity
-  cluster.centers@perp.q1 <- q1.perplexity
-  cluster.centers@perp.q3 <- q3.perplexity
-  cluster.centers@bic.mean <- mean.bic
-  cluster.centers@bic.median <- median.bic
-  cluster.centers@bic.sd <- sd.bic
-  cluster.centers@bic.q1 <- q1.bic
-  cluster.centers@bic.q3 <- q3.bic
-  cluster.centers@silhou.width <- silhou.ave
-  cluster.centers@silhou.width.sd <- silhou.sd
-  cluster.centers@silhou.width.mean <- silhou.median
-  cluster.centers@silhou.width.q1 <- silhou.q1
-  cluster.centers@silhou.width.q3 <- silhou.q3
+  signs.l <- list(median = median.signs,
+                mean = mean.signs,
+                q1 = q1.signs,
+                q3 = q3.signs )
+  exps.l <- list(median = median.exps,
+                 mean = mean.exps,
+                 q1 = q1.exps,
+                 q3 = q3.exps )
+  perp.l <- list(median = median.perplexity,
+                 mean = mean.perplexity,
+                 q1 = q1.perplexity,
+                 q3 = q3.perplexity)
+  bic.l <- list(median = median.bic,
+                mean = mean.bic,
+                q1 = q1.bic,
+                q3 = q3.bic)
+  silhou.l <- list(median = median.silhou,
+                mean = mean.silhou,
+                q1 = q1.silhou,
+                q3 = q3.silhou,
+                sd = sd.silhou)
+
+  cluster.centers@signs <- signs.l
+  cluster.centers@exps <- exps.l
+  cluster.centers@perp <- perp.l
+  cluster.centers@bic <- bic.l
+  cluster.centers@silhou.width <- silhou.l
   cluster.centers@nsig <- nsig
-  
+
   return(cluster.centers)
 })
 
-setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster = FALSE, n.iter = 200){
+
+setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster = FALSE, n.iter = 10){
   index <- 1
   input.matrix <- t(as.matrix(object@input.dtm))
   object@input.matrix <- input.matrix
@@ -300,17 +225,17 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
 
       beta<-slot(inst.method, 'beta')
       gamma<-slot(inst.method, 'gamma')
-      inst.tmp@signs <- exp(t(beta))
-      inst.tmp@exps <- t(gamma)
+      inst.tmp@signs <- list( inst = exp(t(beta)))
+      inst.tmp@exps <- list( inst = t(gamma))
+
       error <- calc.frob.error(inst.tmp, input.matrix)
       inst.tmp@frob.err <- error
 
-      object@insts[[index]]@frob.err <- error
       if(cluster){
         stack.tmp@insts[[iter]] <- inst.tmp
       }
-      if(error < min.err){
-        min.err <- error
+      if(error$inst < min.err){
+        min.err <- error$inst
         min.inst <- inst.tmp
       }
     }
@@ -320,38 +245,15 @@ setMethod("run.calc", signature(object = "sign.stack"), function(object, cluster
       cluster.center <- cluster.signs(stack.tmp)
       object@insts[[index]] <- cluster.center
       object@insts[[index]]@frob.err <- calc.frob.error(cluster.center, input.matrix)
-      object@insts[[index]]@frob.err.mean <- calc.frob.error(cluster.center, input.matrix, by = "mean")
-      object@insts[[index]]@frob.err.q1 <- calc.frob.error(cluster.center, input.matrix, by = "q1")
-      object@insts[[index]]@frob.err.q3 <- calc.frob.error(cluster.center, input.matrix, by = "q3")
     }
 
     object@min.insts[[index]] <- min.inst
     object@min.insts[[index]]@frob.err <- calc.frob.error(min.inst, input.matrix)
-    object@min.insts[[index]]@frob.err.mean <- object@min.insts[[index]]@frob.err
-    object@min.insts[[index]]@frob.err.q1 <- object@min.insts[[index]]@frob.err
-    object@min.insts[[index]]@frob.err.q3 <- object@min.insts[[index]]@frob.err
-    object@min.insts[[index]]@perp.median <- calc.perplexity.inst(min.inst,  object@input.dtm, object@method)
-    print(calc.perplexity.inst(min.inst,  object@input.dtm, object@method))
-    object@min.insts[[index]]@perp.mean <- object@min.insts[[index]]@perp.median
-    object@min.insts[[index]]@perp.q1 <- object@min.insts[[index]]@perp.q1
-    object@min.insts[[index]]@perp.q3 <- object@min.insts[[index]]@perp.q3
-    object@min.insts[[index]]@bic <- calc.bic.inst(min.inst, object@input.dtm, object@method)
-    object@min.insts[[index]]@bic.mean <- object@min.insts[[index]]@bic
-    object@min.insts[[index]]@bic.q1 <- object@min.insts[[index]]@bic
-    object@min.insts[[index]]@bic.q3 <- object@min.insts[[index]]@bic
-    object@min.insts[[index]]@silhou.width <- 1
-    object@min.insts[[index]]@silhou.width.sd <- 0
-    object@min.insts[[index]]@silhou.width.mean <- 1
-    object@min.insts[[index]]@silhou.width.q1 <- 1
-    object@min.insts[[index]]@silhou.width.q3 <- 1
-
-
-    #}else{
-    #  object@insts[[index]] <- min.inst
-    #}
+    object@min.insts[[index]]@perp <- list(inst = calc.perplexity.inst(min.inst,  object@input.dtm, object@method))
+    object@min.insts[[index]]@bic <- list(inst = calc.bic.inst(min.inst, object@input.dtm, object@method))
+    object@min.insts[[index]]@silhou.width <- list(inst = 1)
     index <- index + 1
   }  
-
 
   rm(input.matrix)
   rm(min.inst) 
@@ -368,14 +270,6 @@ setMethod("calc.perplexity.inst", signature(object = "sign.inst"), function(obje
   return(perplexity)
 })
 
-setMethod("calc.perplexity", signature(object = "sign.stack"), function(object, new.data){
-  for(index in 1:object@num.insts){
-    object@insts[[index]] <- calc.perplexity.inst(object@insts[[index]], new.data, object@method)
-  }
-  return(object)
-})
-
-
 setMethod("calc.bic.inst", signature(object = "sign.inst"), function(object, input.dtm, method.desc){
   if(method.desc == "ctm") method <- object@method@ctm
   else if(method.desc == "lda") method <- object@method@lda
@@ -388,13 +282,6 @@ setMethod("calc.bic.inst", signature(object = "sign.inst"), function(object, inp
   bic <- (2*as.numeric(logLik(method))) - (ngenome + ntype)*log(ngenome)*nsig
 
   return(bic)
-})
-
-setMethod("calc.bic", signature(object = "sign.stack"), function(object){
-  for(index in 1:object@num.insts){
-    object@insts[[index]] <- calc.bic.inst(object@insts[[index]], object@input.dtm, object@method)
-  }
-  return(object)
 })
 
 find_signatures <- function(){
