@@ -10,7 +10,8 @@ setClass("sign.inst", representation(nsig = "integer",
                                      perp = "list", 
                                      bic = "list",
                                      frob.err = "list", 
-                                     silhou.width = "list"))
+                                     silhou.width = "list",
+                                     iter = "integer"))
 
 setGeneric("calc.frob.error", def = function(object, input.matrix){
   standardGeneric("calc.frob.error")
@@ -40,6 +41,9 @@ setGeneric("get.frob.err", function(object, by = "inst"){
   standardGeneric("get.frob.err")
 })
 
+setGeneric(".run.iter", function(object, n.iter, input.dtm, input.matrix, isig, method){
+  standardGeneric(".run.iter")
+})
 
 setClass("sign.stack", representation(nsig.min = "integer", 
                                      nsig.step = "integer", 
@@ -78,4 +82,8 @@ setGeneric("calc.bic", function(object){
 
 setGeneric("cluster.signs", function(object){
   standardGeneric("cluster.signs")
+})
+
+setGeneric(".get.min.inst", function(object){
+  standardGeneric(".get.min.inst")
 })
