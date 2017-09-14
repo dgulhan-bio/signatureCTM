@@ -51,8 +51,7 @@ setMethod("get.frob.err", signature(object = "sign.inst"), function(object, by =
 setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, input.matrix){
   by <- names(object@signs)
   error.list <- list()
-  
-  for(icalc in length(by)){
+  for(icalc in 1:length(by)){
     exposures <- object@exps[[icalc]]
     signatures <- object@signs[[icalc]]
 
@@ -69,7 +68,6 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
 
     error.list[[by[[icalc]]]] <- error
   }
-  print(error.list)
   return(error.list)
 })
 
