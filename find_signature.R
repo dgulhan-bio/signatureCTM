@@ -69,7 +69,7 @@ setMethod("calc.frob.error", signature(object = "sign.inst"), function(object, i
 
     error.list[[by[[icalc]]]] <- error
   }
-
+  print(error.list)
   return(error.list)
 })
 
@@ -159,8 +159,8 @@ s')
   
   median.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = median.signs)
   mean.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = mean.signs)
-  mean.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q1.signs)
-  mean.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q3.signs)
+  q1.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q1.signs)
+  q3.exps <- apply(object@input.matrix, 2, function(x, signs) coef(nnls(signs, x)), signs = q3.signs)
   cluster.centers <- new("sign.inst")
   signs.l <- list(median = median.signs,
                 mean = mean.signs,
